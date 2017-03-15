@@ -1,0 +1,21 @@
+{
+  "name": "wordpress-to-static",
+  "version": "1.0.0",
+  "description": "Eeasy to configure wordpress exporter for static site generators. It can get urls for post thumbnails, and id based images, galleries and captions. Output of embed, caption, and gallery shortcodes can also be changed as needed.",
+  "main": "index.js",
+  "dependencies": {
+    "bluebird": "^3.5.0",
+    "fs-extra": "^2.0.0",
+    "js-yaml": "^3.8.2",
+    "moment": "^2.17.1",
+    "to-markdown": "^3.0.3",
+    "xml2js": "^0.4.17"
+  },
+  "devDependencies": {
+  },
+  "scripts": {
+    "start": "node ."
+  },
+  "author": "Alan North",
+  "license": "MIT"
+}
