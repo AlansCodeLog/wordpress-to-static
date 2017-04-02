@@ -210,8 +210,12 @@ function extract (result) {
                 if (items['wp:postmeta'][key]['wp:meta_key'] == "_thumbnail_id") {
                     let thumbnail = getimagebyid(items['wp:postmeta'][key]['wp:meta_value'][0])
                     post.thumbnail_url = thumbnail.url.replace(/.*?wp-content\/(.*?)/ig, config.image_folder_path)
-                    if (thumbnail.caption !== "") {
-                        post.thumbnail_caption = thumbnail.caption
+                    if (thumbnail.caption !== "" && thumbnail.caption !== "\"\"") {
+                        post.thumbnail_caption = thumbnail.caption.replace(/\"/g, "")
+                        if (post.thumbnail_caption.includes("\n")) {
+                            post.thumbnail_caption = "|\n    " + post.thumbnail_caption.replace(/\n\n/g, "\n    ")
+                            //yaml can't contain hard tabs?
+                        }
                     }
                     if (config.get_thumb_sizes && typeof thumbnail.sizes !== 'undefined' && thumbnail.sizes !== null) { //special check for empty arrays
                         post.thumbnail_sizes = "[ " + thumbnail.sizes.join("\", \"") + " ]"
@@ -230,7 +234,7 @@ function extract (result) {
             })
         }
         if (typeof items.category !== "undefined") {
-            post.categories = items.category.filter(function(categories) {return categories['$'].domain == "post_tag" }).map(categories => {
+            post.categories = items.category.filter(function(categories) {return categories['$'].domain == "category" }).map(categories => {
                 if (config.nicename_categories == true) {
                     return categories['$'].nicename
                 } else {
@@ -372,7 +376,6 @@ function writeFiles (blog) {
                     content.push("---")
                 }
                 content = content.join("")
-                console.log(content)
                 if (post.layout == "page") {
                     fs.writeFileAsync(__dirname + "/export/" + filename +".md", content)
                     .then(data => {
