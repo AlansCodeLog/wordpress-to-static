@@ -38,6 +38,9 @@ Promise.all(files)
 //overwrite default configuration
 function configure(data) {
     for (option in data) {
+        if (config[option] !== data[option]) {
+            console.log("Overriding default option: "+option+": "+config[option]+" with "+data[option])
+        }
         config[option] = data[option]
     }
 }
@@ -52,20 +55,22 @@ config.newline_style ="\r\n"
 let newline = config.newline_style
 config.line_spacing_amount = 2
 let line_spacing = config.newline_style.repeat(config.line_spacing_amount)
+config.recognized_embed_style = "[embed]$2[/embed]"
+config.embed_style = "[embed]$1[/embed]"
+config.iframe_style = "[iframe$1$3 src=\"$2\"][/iframe]" //$2 is src, $1 & $3 are other attributes
 config.caption_style = "[caption]$1[/caption]"
-config.embed_style = "[youtube]$1[/youtube]"
-config.iframe_style = newline + "[iframe$1$3]$2[iframe]" + newline //$2 is src, $1 & $3 are other attributes
+config.gallery_image_style = "[figure]$1[/figure]"
 config.gallery_style = "[gallery]$1[/gallery]"
 config.newlines_in_gallery = true
 config.change_underlines = true
 config.remove_spans = true
-config.image_folder_path = "/resources/$1"
+config.image_folder_path = "/resources/uploads/$1"
 //post file options
 config.export_w_title_slug = true
 //in post header
 config.nicename_title_slug = false
-config.nicename_tags = true
-config.nicename_categories = true
+config.nicename_tags = false
+config.nicename_categories = false
 config.get_passwords = false
 config.get_post_author = false
 config.get_thumbs = true
@@ -113,7 +118,9 @@ function extract (result) {
             let item = []
             if (itemid == id){
                 item.caption = results.item[index]['excerpt:encoded'][0]
-                item.caption = "\"" + toMarkdown(item.caption, {converters: converterlist}) + "\""
+                if (item.caption.length !== 0) {
+                    item.caption = toMarkdown(item.caption, {converters: converterlist})
+                }
                 item.url = results.item[index]['wp:attachment_url'][0]
                 item.title = results.item[index]['title'][0]
                 if (config.get_thumb_sizes) {
@@ -193,7 +200,7 @@ function extract (result) {
         if (items['wp:post_date_gmt'][0] !== "Invalid Date") { //not sure how, but 0000-00-00 00:00:00 might be set which returns invalid
             post.date = moment.utc(items['wp:post_date_gmt'][0], "YYYY-MM-DD HH:mm:ss").format()
         }
-        post.layout = items['wp:post_type'][0]
+        post.type = items['wp:post_type'][0]
         if (config.get_passwords && items['wp:post_password'][0] !== "") {//UNTESTED
             post.password = items['wp:post_password'][0]
         }
@@ -209,10 +216,11 @@ function extract (result) {
             for (key in items['wp:postmeta']) {
                 if (items['wp:postmeta'][key]['wp:meta_key'] == "_thumbnail_id") {
                     let thumbnail = getimagebyid(items['wp:postmeta'][key]['wp:meta_value'][0])
-                    post.thumbnail_url = thumbnail.url.replace(/.*?wp-content\/(.*?)/ig, config.image_folder_path)
+                    post.thumbnail_url = thumbnail.url.replace(/http:.*?wp-content\/uploads\/(.*)/ig, config.image_folder_path)
                     if (thumbnail.caption !== "" && thumbnail.caption !== "\"\"") {
-                        post.thumbnail_caption = thumbnail.caption.replace(/\"/g, "")
+                        post.thumbnail_caption = thumbnail.caption
                         if (post.thumbnail_caption.includes("\n")) {
+                            post.thumbnail_caption = post.thumbnail_caption.replace(/\"([\S\s]*)\"/g, "$1")
                             post.thumbnail_caption = "|\n    " + post.thumbnail_caption.replace(/\n\n/g, "\n    ")
                             //yaml can't contain hard tabs?
                         }
@@ -245,9 +253,24 @@ function extract (result) {
         //CONTENT PROCESSING
         if (items['content:encoded'][0] !== "") {
             post.content = items['content:encoded'][0]
+            post.content = post.content.replace(/(\n|\r|\r\n)(<a href.*?<\/a>)(\n|\r|\r\n)/g, "<p>$2</p>") //toMarkdown might collapse lists of links otherwise
+            //it also collapses shortcodes, but they're mostly handled when replacing them below
             post.markdown = toMarkdown(post.content, {converters: converterlist})
             //format will depend on templates supported by static generator, other iframes left untouched
-            .replace(/\[embed\](.*?)\[\/embed\]/g, config.embed_style)
+            .replace(/\[embed\](.*?)\[\/embed\]/g, (match, group)=> {
+                if (group.match("youtu(.be|be)")) {
+                    var name = config.recognized_embed_style.replace(/embed/g, "youtube")
+                    return group.replace(/(.*?(?:v\=|.be\/))(.*)/, newline + name + newline)
+                } else if (group.match("imgur")) {
+                    var name = config.recognized_embed_style.replace(/embed/g, "imgur")
+                    return group.replace(/(https?:\/\/imgur\.com\/.*?\/)(.*?)([#\/].*|$)/gm, newline + name + newline)
+                } else if (group.match("instagram")) {
+                    var name = config.recognized_embed_style.replace(/embed/g, "instagram")
+                    return group.replace(/(http.*?instagram.com\/.*?\/)(.*?)\//g, newline + name + newline)
+                } else {
+                    return newline + config.embed_style + newline
+                }
+            })
             //gets captions set through id, caption shortcode replaced later
             .replace(/\[caption.*?(id="attachment_|id=")(.*?)".*?"].*?((.*?)\[\/caption\]|\))/g, function(match, ignoredgroup, id, innerwrong, inner) {
                 if (id == "") { //for some reason one of mine was empty?
@@ -255,7 +278,8 @@ function extract (result) {
                     return newline + inner + newline
                 } else {
                     let item = getimagebyid(id)
-                    if (item.caption !== "") {
+                    if (item.caption.length !== 0) {
+                        item.caption = item.caption.replace(/\"([\S\s]*)\"/g, "$1")
                         item.caption = toMarkdown(item.caption)
                         var itemreplace = newline + "!["+ item.title + "](" + item.url + ")" + newline + "[caption]" + item.caption +"[/caption]" + newline
                     } else {
@@ -278,7 +302,18 @@ function extract (result) {
                 for (i in ids) {
                     let id = ids[i]
                     let item = getimagebyid(id)
-                    let itemreplace = "!["+ item.title + "](" + item.url + ")" + newline + "[caption]" + item.caption +"[/caption]" + newline
+                    if (item.caption.length !== 0) {
+                        var itemreplace = newline + "!["+ item.title + "](" + item.url + ")" + newline + "[caption]" + item.caption +"[/caption]" + newline
+                    } else {
+                        var itemreplace = newline + "!["+ item.title + "](" + item.url + ")" + newline
+                    }
+                    itemreplace = itemreplace.replace(/([\s\S]*)/gm, match => {
+                        if (match !== "") {
+                            return newline + "[figure]" + match + "[/figure]" + newline
+                        } else {
+                            return match
+                        }
+                    })
                     urls.push(itemreplace)
                 }
                 urls = urls.join("")
@@ -291,7 +326,9 @@ function extract (result) {
             //change path for images
             .replace(/http:.*?wp-content\/uploads\/(.*?\))/ig, config.image_folder_path)
             //change iframe style
-            .replace (/\<iframe(.*?)src="(.*?)"(.*?)><\/iframe>/g, config.iframe_style)
+            .replace (/\<iframe(.*?)src="(.*?)"(.*?)><\/iframe>/g, newline + config.iframe_style + newline)
+            //change gallery style
+            .replace (/\[figure\]([^]*)\[\/figure\]/igm, config.gallery_image_style)
             //change gallery style
             .replace (/\[gallery\]([^]*)\[\/gallery\]/igm, config.gallery_style)
             //fix newline + whitespace
@@ -353,8 +390,10 @@ function writeFiles (blog) {
                 content.push("---" + newline)
                 for (property in post) {
                     if (property !== "undefined") {
-                        if (property == "slug" && config.nicename_title_slug) {
-                             content.push(property + ": " + post[property] + newline)
+                        if (property == "slug") {
+                            if (config.nicename_title_slug || post[property] !== post.title.replace(/(-|\/)/g, "").replace(/(\'|\"|\(|\)|\[|\]|\?|\+)/g, "").replace(/(\s)+/g, "-").toLowerCase()) {
+                                 content.push(property + ": " + post[property] + newline)
+                            }
                         } else if (typeof post[property] == "object") {
                             let array = []
                             for (term in post[property]) {
@@ -376,7 +415,7 @@ function writeFiles (blog) {
                     content.push("---")
                 }
                 content = content.join("")
-                if (post.layout == "page") {
+                if (post.type == "page") {
                     fs.writeFileAsync(__dirname + "/export/" + filename +".md", content)
                     .then(data => {
                         //console.log("Exported item: " + (parseInt(item) + 1))
