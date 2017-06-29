@@ -64,6 +64,7 @@ config.gallery_style = "[gallery]$1[/gallery]"
 config.newlines_in_gallery = true
 config.change_underlines = true
 config.remove_spans = true
+config.remove_weird_spans= true
 config.image_folder_path = "/resources/uploads/$1"
 //post file options
 config.export_w_title_slug = true
@@ -71,6 +72,9 @@ config.export_w_title_slug = true
 config.nicename_title_slug = false
 config.nicename_tags = false
 config.nicename_categories = false
+config.taxnms_force_lowercase= true
+config.order_taxnms = true
+config.merge_taxnms = "tags"
 config.get_passwords = false
 config.get_post_author = false
 config.get_thumbs = true
@@ -98,13 +102,20 @@ let converterlist = (function() {
     }
     if (config.remove_spans) {
         let spanfilter = {
-            filter: 'span', //replaces any weird spans, might replace important ones
+            filter: 'span',
             replacement: function(content) {
-                return '' + content + '';
+                return content
             }
         }
         converters.push(spanfilter)
     }
+    let morefix = {
+        filter: 'more',
+        replacement: function(content) {
+            return newline+'<!--more-->'+newline;
+        }
+    }
+    converters.push(morefix)
     return converters
 })();
 
@@ -146,27 +157,52 @@ function extract (result) {
         .map(categories => {
             let categorylist = []
             if (config.list_terms_nicename) {
-                categorylist.name = categories['wp:category_nicename'][0]
+                categorylist.name = categories['wp:cat_name'][0]
+                categorylist.nicename = categories['wp:category_nicename'][0]
             } else {
                 categorylist.name = categories['wp:cat_name'][0]
             }
             if (typeof categorylist.parent !== "undefined") { //UNTESTED
                 categorylist.parent = category['wp:category_parent'][0]
             }
+            if (config.taxnms_force_lowercase) {
+                categorylist.nicename = categorylist.nicename.toLowerCase()
+            }
             return categorylist
         })
-
         blog.info.tags = results['wp:tag']
         .map(tags => {
             let taglist = []
             taglist.name = tags['wp:tag_slug'][0]
             if (config.list_terms_nicename) {
-                taglist.name = tags['wp:tag_slug'][0]
+                taglist.nicename = tags['wp:tag_name'][0]
+                taglist.nicename = tags['wp:tag_slug'][0]
             } else {
                 taglist.name = tags['wp:tag_name'][0]
             }
+            if (config.taxnms_force_lowercase) {
+                taglist.nicename = taglist.nicename.toLowerCase()
+            }
             return taglist
         })
+        function blog_info_taxnms_sort(a,b) {
+            if (a.name === b.name) {
+                return 0
+            } else {
+                return (a.name < b.name) ? -1 : 1;
+            }
+        }
+        if (config.order_taxnms) {
+            blog.info.tags = blog.info.tags.sort(blog_info_taxnms_sort)
+            blog.info.categories = blog.info.categories.sort(blog_info_taxnms_sort)
+        }
+        if (config.merge_taxnms) {
+            var tags = blog.info.tags.slice()
+            var categories = blog.info.categories.slice()
+            delete blog.info.tags
+            delete blog.info.categories
+            blog.info[config.merge_taxnms] = [...new Set([...tags, ...categories])];
+        }
     }
     //console.log(results['wp:terms']);
     //terms not exported, they're just a summary of tags, categories, and other variables used by wordpress that I don't think matter much, you can see them by uncommenting the above
@@ -194,7 +230,7 @@ function extract (result) {
         if (config.get_original_links) {
             post.original_link = items.link[0]
         }
-        if (config.get_post_author == true) {
+        if (config.get_post_author) {
             post.author = items['dc:creator'][0]
         }
         if (items['wp:post_date_gmt'][0] !== "Invalid Date") { //not sure how, but 0000-00-00 00:00:00 might be set which returns invalid
@@ -234,28 +270,60 @@ function extract (result) {
         //TERMS
         if (typeof items.category !== "undefined") {
             post.tags = items.category.filter(function(tags) {return tags['$'].domain == "post_tag" }).map(tags => {
-                if (config.nicename_tags == true) {
-                    return tags['$'].nicename
+                var value;
+                if (config.nicename_tags) {
+                    value = tags['$'].nicename
                 } else {
-                    return tags._
+                    value = tags._
                 }
+                if (typeof config.taxnms_force_lowercase) {
+                    value = value.toLowerCase()
+                }
+                return value
             })
+            if (config.order_taxnms) {
+                post.tags = post.tags.sort()
+            }
+        } else if (config.merge_taxnms) {
+            post.tags = []
         }
         if (typeof items.category !== "undefined") {
             post.categories = items.category.filter(function(categories) {return categories['$'].domain == "category" }).map(categories => {
-                if (config.nicename_categories == true) {
-                    return categories['$'].nicename
+                var value;
+                if (config.nicename_categories) {
+                    value = categories['$'].nicename
                 } else {
-                    return categories._
+                    value = categories._
                 }
+                if (typeof config.taxnms_force_lowercase) {
+                    value = value.toLowerCase()
+                }
+                return value
             })
+            if (config.order_taxnms) {
+                post.categories = post.categories.sort()
+            }
+        } else if (config.merge_taxnms) {
+            post.categories = []
+        }
+        if (config.merge_taxnms) {
+            var tags = post.tags.slice()
+            var categories = post.categories.slice()
+            delete post.tags
+            delete post.categories
+            post[config.merge_taxnms] = [...new Set([...tags, ...categories])];
         }
         //CONTENT PROCESSING
         if (items['content:encoded'][0] !== "") {
             post.content = items['content:encoded'][0]
-            post.content = post.content.replace(/(\n|\r|\r\n)(<a href.*?<\/a>)(\n|\r|\r\n)/g, "<p>$2</p>") //toMarkdown might collapse lists of links otherwise
+            post.markdown = post.content.replace("<!--more-->", "<more>nothing</more>")//temporarily allow more tag to be detected by toMarkdown
+            post.markdown = post.markdown.replace(/(\n|\r|\r\n)(<a href.*?<\/a>)(\n|\r|\r\n)/g, "<p>$2</p>")
+             //toMarkdown might collapse lists of links otherwise
             //it also collapses shortcodes, but they're mostly handled when replacing them below
-            post.markdown = toMarkdown(post.content, {converters: converterlist})
+            if (config.remove_weird_spans) {
+                post.markdown = post.markdown.replace(/(?:\r|\r\n|\n)+<span.*?data-wfid.*?>([\s\S]*?)<\/span>/gm, "<p>$1</p>")
+            }
+            post.markdown = toMarkdown(post.markdown, {converters: converterlist})
             //format will depend on templates supported by static generator, other iframes left untouched
             .replace(/\[embed\](.*?)\[\/embed\]/g, (match, group)=> {
                 if (group.match("youtu(.be|be)")) {
@@ -434,15 +502,17 @@ function writeFiles (blog) {
         writeAll.push(Promise.resolve(new Promise(function(resolve, reject) {
             let content = []
             for (property in blog.info) {
-                if (property !== "categories" && property !== "tags") {
+                if (typeof blog.info[property] !== "object") {
                     content.push(property + ": " + blog.info[property] + newline)
-                } else if (typeof blog.info[property] == "object") {
+                } else if (typeof blog.info[property] == "object") {//tags and categories
                     content.push(property + ": " + newline)
                     for (term in blog.info[property]) {
-                        content.push("\t" + blog.info[property][term].name + newline)
+                        if (config.list_terms_nicename) {
+                            content.push("\t" + blog.info[property][term].name + " (" + blog.info[property][term].nicename + ")" + newline)
+                        } else {
+                            content.push("\t" + blog.info[property][term].name + newline)
+                        }
                     }
-                } else if (property !== "slug") {
-                    content.push(property + ": " + blog.info[property] + newline)
                 }
             }
             content = content.join("")

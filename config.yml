@@ -25,12 +25,14 @@
     newlines_in_gallery : true
     # Changes <u>underline</u> to  __underline__. Not supported by most markdown editors, usually converted later to bold. Default is true so instaces are easy to search for.
     change_underlines : true
-    # Removes any spans. I had some weird spans with weird attributes that were pointless, might cause problems if you used spans for some something.
+    # Removes any spans.
     remove_spans : true
+    # I had some weird span wrapped around a few paragraphs, so I replaced them. Won't affect you if you didn't have them.
+    remove_weird_spans: true
 # EXPORTING
     # Change all wp-content/uploads links. Can be absolute or relative.
     image_folder_path : "/resources/uploads/$1"
-    # Use slug as file name.
+    # Use slug as file name, otherwise it uses the post title.
     export_w_title_slug : true
 # EXPORTING - HEADER
     # Always export the slug property. If false a slug property is included only if it's not the same as the title (when "/" are removed, other symbols replaced with dashes, and multiple dashes in a row are replaced with just one). This is as close to wordpress's urls as I could get but most static generators have their own way of converting titles to urls so that might still cause problems.
@@ -38,6 +40,12 @@
     # Use nicenames (slug) for terms.
     nicename_tags : false
     nicename_categories : false
+    # Use only lowercase letter for tags and categories.
+    taxnms_force_lowercase: true
+    # Order taxnms alphabetically.
+    order_taxnms: true
+    # Merge tags and categories to designated property (or to disable set to false). The above options are applied first.
+    merge_taxnms: "tags"
     # Include passwords.
     get_passwords : false
     # Include author.

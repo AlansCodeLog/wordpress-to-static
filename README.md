@@ -45,24 +45,30 @@ Options and their defaults. Program should log out "Changed default option x wit
     # Default is double line spacing.
     line_spacing_amount : 2
 # FORMATING - SHORTCODES
-    caption_style : "[caption]$1[/caption]"
     #$2 will be just embed id (supports youtube, instagram, and imgur), $1 is preceding url
     recognized_embed_style : "[embed]$2[/embed]"
     #for unsupported embeds
     embed_style : "[embed]$1[/embed]"
     # $2 is iframe src , $1 and $2 are anything in between (width, height, etc).
     iframe_style : "[iframe$1$3 src=\"$2\"][/iframe]"
+    # Shortcode for captions. It should capture even captions only referrenced by id.
+    caption_style : "[caption]$1[/caption]"
+    # gallery item style. Will wrap around images and caption.
+    gallery_image_style: "[figure]$1[/figure]"
+    # gallerty style wrappe around above.
     gallery_style : "[gallery]$1[/gallery]"
     # Newlines between images and captions in galleries, might cause extra p tags to be inserted depending on your static site generator.
     newlines_in_gallery : true
-    # Changes &lt;u&gt;underline&lt;/u&gt; to \__underline__. Not supported by most markdown editors, usually converted later to bold. Default is true so instaces are easy to search for.
+    # Changes <u>underline</u> to  __underline__. Not supported by most markdown editors, usually converted later to bold. Default is true so instaces are easy to search for.
     change_underlines : true
-    # Removes any spans. I had some weird spans with weird attributes that were pointless, might cause problems if you used spans for some something.
+    # Removes any spans.
     remove_spans : true
+    # I had some weird span wrapped around a few paragraphs, so I replaced them. Won't affect you if you didn't have them.
+    remove_weird_spans: true
 # EXPORTING
     # Change all wp-content/uploads links. Can be absolute or relative.
     image_folder_path : "/resources/uploads/$1"
-    # Use slug as file name.
+    # Use slug as file name, otherwise it uses the post title.
     export_w_title_slug : true
 # EXPORTING - HEADER
     # Always export the slug property. If false a slug property is included only if it's not the same as the title (when "/" are removed, other symbols replaced with dashes, and multiple dashes in a row are replaced with just one). This is as close to wordpress's urls as I could get but most static generators have their own way of converting titles to urls so that might still cause problems.
@@ -70,6 +76,12 @@ Options and their defaults. Program should log out "Changed default option x wit
     # Use nicenames (slug) for terms.
     nicename_tags : false
     nicename_categories : false
+    # Use only lowercase letter for tags and categories.
+    taxnms_force_lowercase: true
+    # Order taxnms alphabetically.
+    order_taxnms: true
+    # Merge tags and categories to designated property (or to disable set to false). The above options are applied first.
+    merge_taxnms: "tags"
     # Include passwords.
     get_passwords : false
     # Include author.
