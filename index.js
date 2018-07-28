@@ -324,11 +324,13 @@ function extract (result) {
             post.content = items['content:encoded'][0]
             post.markdown = post.content.replace("<!--more-->", "<more>nothing</more>")//temporarily allow more tag to be detected by toMarkdown
             post.markdown = post.markdown.replace(/(\n|\r|\r\n)(<a href.*?<\/a>)(\n|\r|\r\n)/g, "<p>$2</p>")
-             //toMarkdown might collapse lists of links otherwise
+            //toMarkdown might collapse lists of links otherwise
             //it also collapses shortcodes, but they're mostly handled when replacing them below
             if (config.remove_weird_spans) {
                 post.markdown = post.markdown.replace(/(?:\r|\r\n|\n)+<span.*?data-wfid.*?>([\s\S]*?)<\/span>/gm, "<p>$1</p>")
             }
+            post.markdown = post.markdown.replace(/<p style=\"padding-left\: 30px\;\">(.*?)<\/p>/g, "<blockquote>$1</blockquote>")
+            post.markdown = "<p>" + post.markdown.replace(/(\r|\n|\r\n)+/g, "</p><p>") + "</p>"
             post.markdown = toMarkdown(post.markdown, {converters: converterlist})
             //format will depend on templates supported by static generator, other iframes left untouched
             .replace(/\[embed\](.*?)\[\/embed\]/g, (match, group)=> {
@@ -349,15 +351,16 @@ function extract (result) {
             .replace(/\[caption.*?(id="attachment_|id=")(.*?)".*?"].*?((.*?)\[\/caption\]|\))/g, function(match, ignoredgroup, id, innerwrong, inner) {
                 if (id == "") { //for some reason one of mine was empty?
                     inner = inner.replace(/(!\[.*?\))(.*)/gm, "$1" + newline + "[caption]$2[/caption]")
+                    inner = newline + "[figure]"+ newline + inner +"[/caption]"+newline+"[/figure]" + newline
                     return newline + inner + newline
                 } else {
                     let item = getimagebyid(id)
                     if (item.caption.length !== 0) {
                         item.caption = item.caption.replace(/\"([\S\s]*)\"/g, "$1")
                         item.caption = toMarkdown(item.caption)
-                        var itemreplace = newline + "!["+ item.title + "](" + item.url + ")" + newline + "[caption]" + item.caption +"[/caption]" + newline
+                        var itemreplace = newline + "[figure]"+ newline + "!["+ item.title + "](" + item.url + ")" + newline + "[caption]" + item.caption +"[/caption]"+newline+"[/figure]" + newline
                     } else {
-                        var itemreplace = newline + "!["+ item.title + "](" + item.url + ")" + newline
+                        var itemreplace =  newline + "[figure]"+ newline + "!["+ item.title + "](" + item.url + ")" + newline+"[/figure]" + newline
                     }
                 }
                 return itemreplace
