@@ -192,7 +192,7 @@ function extract (result) {
                 return (a.name < b.name) ? -1 : 1;
             }
         }
-        if (config.order_taxnms) {
+        if (!config.merge_taxnms && config.order_taxnms) {
             blog.info.tags = blog.info.tags.sort(blog_info_taxnms_sort)
             blog.info.categories = blog.info.categories.sort(blog_info_taxnms_sort)
         }
@@ -202,6 +202,9 @@ function extract (result) {
             delete blog.info.tags
             delete blog.info.categories
             blog.info[config.merge_taxnms] = [...new Set([...tags, ...categories])];
+            if (config.order_taxnms) {
+                blog.info[config.merge_taxnms] = blog.info[config.merge_taxnms].sort(blog_info_taxnms_sort)
+            }
         }
     }
     //console.log(results['wp:terms']);
@@ -281,7 +284,7 @@ function extract (result) {
                 }
                 return value
             })
-            if (config.order_taxnms) {
+            if (!config.merge_taxnms && config.order_taxnms) {
                 post.tags = post.tags.sort()
             }
         } else if (config.merge_taxnms) {
@@ -300,7 +303,7 @@ function extract (result) {
                 }
                 return value
             })
-            if (config.order_taxnms) {
+            if (!config.merge_taxnms && config.order_taxnms) {
                 post.categories = post.categories.sort()
             }
         } else if (config.merge_taxnms) {
@@ -312,6 +315,9 @@ function extract (result) {
             delete post.tags
             delete post.categories
             post[config.merge_taxnms] = [...new Set([...tags, ...categories])];
+            if (config.order_taxnms) {
+                post[config.merge_taxnms] = post[config.merge_taxnms].sort()
+            }
         }
         //CONTENT PROCESSING
         if (items['content:encoded'][0] !== "") {
